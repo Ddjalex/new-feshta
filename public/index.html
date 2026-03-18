@@ -153,23 +153,8 @@
       document
         .getElementById("startButton")
         .addEventListener("click", function () {
-          // TODO: Replace with your game URL or integrate your game in this app.
-          // For now, just show an informational message.
-          alert(
-            "This mini-app is a placeholder. Replace the click handler in public/index.html with your real game URL or game logic."
-          );
-
-          // Example (uncomment and update):
-          // window.location.href = "http://localhost:3002/game";
-
-          // Or send data back to the bot:
-          /*
-            telegramWebApp.sendData(JSON.stringify({
-                action: 'start_game',
-                timestamp: new Date().toISOString()
-            }));
-            telegramWebApp.close();
-            */
+          // Redirect to the main game page (root)
+          window.location.href = "/";
         });
 
       // Add back button event if needed
