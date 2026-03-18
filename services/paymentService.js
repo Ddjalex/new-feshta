@@ -1,5 +1,5 @@
 const axios = require("axios");
-const db = require("../config/db");
+const pool = require("../config/db");
 
 const VALIDATION_API_BASE_URL = "http://196.189.61.138:4001";
 // Adding a longer timeout for slow connections
@@ -21,21 +21,19 @@ const secureAxios = axios.create({
 
 // Get active payment settings for a specific payment method
 const getPaymentSettings = async (paymentMethod) => {
-  const [settings] = await db.execute(
-    "SELECT * FROM payment_settings WHERE payment_method = ? AND status = 'active' LIMIT 1",
+  const result = await pool.query(
+    "SELECT * FROM payment_settings WHERE payment_method = $1 AND status = 'active' LIMIT 1",
     [paymentMethod]
   );
-
-  return settings.length > 0 ? settings[0] : null;
+  return result.rows.length > 0 ? result.rows[0] : null;
 };
 
 // Get all active payment settings
 const getAllPaymentSettings = async () => {
-  const [settings] = await db.execute(
+  const result = await pool.query(
     "SELECT * FROM payment_settings WHERE status = 'active'"
   );
-
-  return settings;
+  return result.rows;
 };
 
 // Create a transaction record
@@ -46,29 +44,28 @@ const createTransaction = async (
   amount,
   txnNumber = null
 ) => {
-  const [result] = await db.execute(
+  const result = await pool.query(
     `INSERT INTO transactions 
      (user_id, transaction_type, payment_method, amount, transaction_number) 
-     VALUES (?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
     [userId, type, paymentMethod, amount, txnNumber]
   );
-
-  return result.insertId;
+  return result.rows[0].id;
 };
 
 // Update user balance
 const updateUserBalance = async (userId, amount) => {
-  await db.execute("UPDATE users SET balance = balance + ? WHERE id = ?", [
+  await pool.query("UPDATE users SET balance = balance + $1 WHERE id = $2", [
     amount,
     userId,
   ]);
 
   // Get updated balance
-  const [rows] = await db.execute("SELECT balance FROM users WHERE id = ?", [
+  const result = await pool.query("SELECT balance FROM users WHERE id = $1", [
     userId,
   ]);
 
-  return rows[0]?.balance || 0;
+  return result.rows[0]?.balance || 0;
 };
 
 // Fallback manual validation for testing/when API is down
@@ -376,12 +373,12 @@ const processDeposit = async (
 ) => {
   try {
     // Check if transaction already exists to prevent duplicates
-    const [existingTxn] = await db.execute(
-      'SELECT id FROM transactions WHERE transaction_number = ? AND transaction_type = "deposit"',
-      [transactionNumber]
+    const result = await pool.query(
+      'SELECT id FROM transactions WHERE transaction_number = $1 AND transaction_type = $2',
+      [transactionNumber, "deposit"]
     );
 
-    if (existingTxn.length > 0) {
+    if (result.rows.length > 0) {
       return {
         success: false,
         message: "This transaction has already been processed",
@@ -460,10 +457,9 @@ const processDeposit = async (
     }
 
     // Begin transaction
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Create transaction record
       const transactionId = await createTransaction(
         userId,
@@ -472,18 +468,14 @@ const processDeposit = async (
         amount,
         transactionNumber
       );
-
       // Update transaction status to completed
-      await connection.execute(
-        "UPDATE transactions SET status = ? WHERE id = ?",
+      await client.query(
+        "UPDATE transactions SET status = $1 WHERE id = $2",
         ["completed", transactionId]
       );
-
       // Update user balance
       const newBalance = await updateUserBalance(userId, amount);
-
-      await connection.commit();
-
+      await client.query('COMMIT');
       return {
         success: true,
         message: "Deposit processed successfully",
@@ -491,10 +483,10 @@ const processDeposit = async (
         newBalance: newBalance,
       };
     } catch (err) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw err;
     } finally {
-      connection.release();
+      client.release();
     }
   } catch (error) {
     console.error("Error processing deposit:", error);
@@ -516,10 +508,10 @@ const createWithdrawalRequest = async (
 ) => {
   try {
     // Check if user has sufficient balance
-    const [user] = await db.execute("SELECT balance FROM users WHERE id = ?", [
+    const userResult = await pool.query("SELECT balance FROM users WHERE id = $1", [
       userId,
     ]);
-
+    const user = userResult.rows;
     if (!user.length || user[0].balance < amount) {
       return {
         success: false,
@@ -528,10 +520,9 @@ const createWithdrawalRequest = async (
     }
 
     // Begin transaction
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Create transaction record (pending)
       const transactionId = await createTransaction(
         userId,
@@ -539,12 +530,11 @@ const createWithdrawalRequest = async (
         paymentMethod,
         -amount
       );
-
       // Create withdrawal request
-      const [result] = await connection.execute(
+      const result = await client.query(
         `INSERT INTO withdrawal_requests 
          (user_id, amount, payment_method, account_number, account_name, transaction_id) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
         [
           userId,
           amount,
@@ -554,32 +544,28 @@ const createWithdrawalRequest = async (
           transactionId,
         ]
       );
-
       // Reserve the amount (deduct from balance)
-      await connection.execute(
-        "UPDATE users SET balance = balance - ? WHERE id = ?",
+      await client.query(
+        "UPDATE users SET balance = balance - $1 WHERE id = $2",
         [amount, userId]
       );
-
-      await connection.commit();
-
+      await client.query('COMMIT');
       // Get updated balance
-      const [updatedUser] = await db.execute(
-        "SELECT balance FROM users WHERE id = ?",
+      const updatedUser = await pool.query(
+        "SELECT balance FROM users WHERE id = $1",
         [userId]
       );
-
       return {
         success: true,
         message: "Withdrawal request submitted successfully",
-        requestId: result.insertId,
-        newBalance: updatedUser[0].balance,
+        requestId: result.rows[0].id,
+        newBalance: updatedUser.rows[0].balance,
       };
     } catch (err) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw err;
     } finally {
-      connection.release();
+      client.release();
     }
   } catch (error) {
     console.error("Error creating withdrawal request:", error);
@@ -594,7 +580,7 @@ const createWithdrawalRequest = async (
 // Get user transactions
 const getUserTransactions = async (userId, limit = 10) => {
   try {
-    const [transactions] = await db.execute(
+    const result = await pool.query(
       `SELECT t.id, t.transaction_type, t.payment_method, t.amount, 
               t.transaction_number, t.status, t.created_at,
               CASE 
@@ -603,13 +589,12 @@ const getUserTransactions = async (userId, limit = 10) => {
                 ELSE t.status
               END AS actual_status
        FROM transactions t
-       WHERE t.user_id = ? AND t.transaction_type IN ('deposit', 'withdrawal', 'manual_deposit')
+       WHERE t.user_id = $1 AND t.transaction_type IN ('deposit', 'withdrawal', 'manual_deposit')
        ORDER BY t.created_at DESC
-       LIMIT ?`,
+       LIMIT $2`,
       [userId, limit]
     );
-
-    return transactions;
+    return result.rows;
   } catch (error) {
     console.error("Error fetching user transactions:", error);
     throw error;
@@ -619,17 +604,16 @@ const getUserTransactions = async (userId, limit = 10) => {
 // Get user withdrawal requests
 const getUserWithdrawalRequests = async (userId, limit = 10) => {
   try {
-    const [requests] = await db.execute(
+    const result = await pool.query(
       `SELECT wr.id, wr.amount, wr.payment_method, wr.account_number, 
               wr.status, wr.created_at, wr.admin_transaction_number
        FROM withdrawal_requests wr
-       WHERE wr.user_id = ?
+       WHERE wr.user_id = $1
        ORDER BY wr.created_at DESC
-       LIMIT ?`,
+       LIMIT $2`,
       [userId, limit]
     );
-
-    return requests;
+    return result.rows;
   } catch (error) {
     console.error("Error fetching withdrawal requests:", error);
     throw error;
@@ -640,43 +624,38 @@ const getUserWithdrawalRequests = async (userId, limit = 10) => {
 const processManualDeposit = async (userId, adminId, amount, note) => {
   try {
     // Begin transaction
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Create transaction record
-      const transactionId = await connection.execute(
+      const transactionResult = await client.query(
         `INSERT INTO transactions 
          (user_id, transaction_type, payment_method, amount, status, reference_number) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
         [userId, "manual_deposit", "system", amount, "completed", note]
       );
-
       // Update user balance
-      await connection.execute(
-        "UPDATE users SET balance = balance + ? WHERE id = ?",
+      await client.query(
+        "UPDATE users SET balance = balance + $1 WHERE id = $2",
         [amount, userId]
       );
-
-      await connection.commit();
-
+      await client.query('COMMIT');
       // Get updated balance
-      const [updatedUser] = await db.execute(
-        "SELECT balance FROM users WHERE id = ?",
+      const updatedUser = await pool.query(
+        "SELECT balance FROM users WHERE id = $1",
         [userId]
       );
-
       return {
         success: true,
         message: "Manual deposit processed successfully",
-        transactionId: transactionId.insertId,
-        newBalance: updatedUser[0].balance,
+        transactionId: transactionResult.rows[0].id,
+        newBalance: updatedUser.rows[0].balance,
       };
     } catch (err) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw err;
     } finally {
-      connection.release();
+      client.release();
     }
   } catch (error) {
     console.error("Error processing manual deposit:", error);
