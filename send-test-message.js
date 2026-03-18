@@ -34,7 +34,7 @@ async function sendTestMessage() {
             {
               text: "🎮 Start Playing",
               web_app: {
-                url: process.env.WEBAPP_URL || "https://your-webapp-url.com",
+                url: process.env.WEBAPP_URL,
               },
             },
           ],
