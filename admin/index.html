@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard - Bingo Telegram</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+        margin: 0;
+        padding: 20px;
+      }
+      h1 {
+        margin-bottom: 0.5rem;
+      }
+      .card {
+        background: #1e293b;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      label {
+        display: block;
+        margin-bottom: 4px;
+        font-weight: 600;
+      }
+      input,
+      textarea,
+      button,
+      select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #e2e8f0;
+        font-size: 14px;
+        margin-bottom: 12px;
+      }
+      button {
+        cursor: pointer;
+        border: none;
+        background: #0284c7;
+      }
+      button:hover {
+        background: #0369a1;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .grid-2 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .user-row {
+        padding: 10px;
+        border-bottom: 1px solid #334155;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .small {
+        font-size: 12px;
+        color: #94a3b8;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Admin Dashboard</h1>
+
+    <div class="card">
+      <h2>Configuration</h2>
+      <label for="apiKey">API Key (x-api-key)</label>
+      <input id="apiKey" placeholder="Enter API key" autocomplete="off" />
+      <button id="saveApiKey">Save API Key</button>
+      <p class="small">Stored in browser local storage. Reloading will keep it.</p>
+    </div>
+
+    <div class="card">
+      <h2>Import User from Excel</h2>
+      <label for="importPhone">Phone Number</label>
+      <input id="importPhone" placeholder="Enter phone number (e.g. 2519...)" autocomplete="off" />
+      <button id="importUser">Import from Excel</button>
+      <p id="importResult" class="small"></p>
+    </div>
+
+    <div class="card">
+      <h2>Broadcast Message</h2>
+      <label for="broadcastMessage">Message</label>
+      <textarea id="broadcastMessage" rows="4" placeholder="Type a message to send to all users..."></textarea>
+      <label>
+        <input type="checkbox" id="includeStartButton" /> Include "Start App" button
+      </label>
+      <button id="sendBroadcast">Send Broadcast</button>
+      <p id="broadcastResult" class="small"></p>
+    </div>
+
+    <div class="card">
+      <div class="grid grid-2">
+        <div>
+          <h2>Telegram Users</h2>
+        </div>
+        <div style="text-align: right;">
+          <button id="reloadUsers">Reload</button>
+        </div>
+      </div>
+      <div id="usersList" class="card" style="padding: 0;">
+        <p class="small">No users loaded yet.</p>
+      </div>
+    </div>
+
+    <script>
+      const storageKey = "bingo_admin_api_key";
+      const apiKeyInput = document.getElementById("apiKey");
+      const importResult = document.getElementById("importResult");
+      const broadcastResult = document.getElementById("broadcastResult");
+
+      const loadApiKey = () => {
+        const stored = localStorage.getItem(storageKey);
+        if (stored) apiKeyInput.value = stored;
+      };
+
+      const saveApiKey = () => {
+        localStorage.setItem(storageKey, apiKeyInput.value.trim());
+        alert("API key saved");
+      };
+
+      const getApiHeaders = () => {
+        const key = apiKeyInput.value.trim();
+        return key ? { "x-api-key": key } : {};
+      };
+
+      const fetchUsers = async () => {
+        const usersList = document.getElementById("usersList");
+        usersList.innerHTML = "<p class=\"small\">Loading...</p>";
+
+        try {
+          const response = await fetch("/api/telegram/users", {
+            headers: { ...getApiHeaders() },
+          });
+          const result = await response.json();
+
+          if (!result.success) {
+            usersList.innerHTML = `<p class=\"small\">Error: ${result.message || "Unknown"}</p>`;
+            return;
+          }
+
+          if (!result.data || result.data.length === 0) {
+            usersList.innerHTML = "<p class=\"small\">No users found.</p>";
+            return;
+          }
+
+          usersList.innerHTML = "";
+          result.data.forEach((user) => {
+            const row = document.createElement("div");
+            row.className = "user-row";
+
+            const idInfo = user.telegram_id
+              ? `Telegram ID: ${user.telegram_id}`
+              : `Phone: ${user.phone_number || "N/A"}`;
+
+            const left = document.createElement("div");
+            left.innerHTML = `<strong>${user.username || user.phone_number || "Unknown"}</strong><br/><span class=\"small\">${idInfo}</span>`;
+
+            const right = document.createElement("div");
+            right.innerHTML = `<span class=\"small\">Created: ${new Date(
+              user.created_at
+            ).toLocaleString()}</span>`;
+
+            row.appendChild(left);
+            row.appendChild(right);
+            usersList.appendChild(row);
+          });
+        } catch (error) {
+          usersList.innerHTML = `<p class=\"small\">Fetch error: ${error.message}</p>`;
+        }
+      };
+
+      const sendBroadcast = async () => {
+        broadcastResult.textContent = "Sending...";
+        const message = document.getElementById("broadcastMessage").value.trim();
+        const includeStartButton = document.getElementById(
+          "includeStartButton"
+        ).checked;
+
+        if (!message) {
+          broadcastResult.textContent = "Message is required.";
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/telegram/bot-broadcast", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...getApiHeaders(),
+            },
+            body: JSON.stringify({ message, includeStartButton }),
+          });
+
+          const result = await response.json();
+          if (!result.success) {
+            broadcastResult.textContent = `Error: ${result.message || "Unknown"}`;
+            return;
+          }
+
+          broadcastResult.textContent = `Sent! ${result.message}`;
+        } catch (error) {
+          broadcastResult.textContent = `Request failed: ${error.message}`;
+        }
+      };
+
+      const importUser = async () => {
+        importResult.textContent = "Importing...";
+        const phone = document.getElementById("importPhone").value.trim();
+        if (!phone) {
+          importResult.textContent = "Phone number is required.";
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/telegram/import-user", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...getApiHeaders(),
+            },
+            body: JSON.stringify({ phoneNumber: phone }),
+          });
+
+          const result = await response.json();
+          if (!result.success) {
+            importResult.textContent = `Error: ${result.message || "Unknown"}`;
+            return;
+          }
+
+          importResult.textContent = `Success: ${result.message}`;
+          fetchUsers();
+        } catch (error) {
+          importResult.textContent = `Request failed: ${error.message}`;
+        }
+      };
+
+      document.getElementById("saveApiKey").addEventListener("click", saveApiKey);
+      document.getElementById("reloadUsers").addEventListener("click", fetchUsers);
+      document.getElementById("sendBroadcast").addEventListener("click", sendBroadcast);
+      document.getElementById("importUser").addEventListener("click", importUser);
+
+      loadApiKey();
+      fetchUsers();
+    </script>
+  </body>
+</html>
