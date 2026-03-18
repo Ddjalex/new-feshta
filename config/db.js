@@ -1,31 +1,29 @@
 require("dotenv").config();
-const mysql = require("mysql2/promise");
+const { Pool } = require("pg");
 
-// Create MySQL connection pool
-const pool = mysql.createPool({
+// Create PostgreSQL connection pool (Neon compatible)
+const pool = new Pool({
   host: process.env.DB_HOST,
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+  ssl: { rejectUnauthorized: false }, // Neon requires SSL
 });
 
 // Test database connection and print helpful guidance if it fails
 async function testConnection() {
   try {
-    const connection = await pool.getConnection();
-    console.log("Database connection successful");
-    connection.release();
+    const client = await pool.connect();
+    console.log("PostgreSQL database connection successful");
+    client.release();
   } catch (error) {
-    console.error("Error connecting to database:");
+    console.error("Error connecting to PostgreSQL database:");
     console.error("  Host:", process.env.DB_HOST);
-    console.error("  Port:", process.env.DB_PORT || 3306);
+    console.error("  Port:", process.env.DB_PORT || 5432);
     console.error("  User:", process.env.DB_USER);
     console.error(
-      "  Make sure MySQL is running and the credentials are correct."
+      "  Make sure your Neon/Postgres database is running and credentials are correct."
     );
     console.error(error);
   }

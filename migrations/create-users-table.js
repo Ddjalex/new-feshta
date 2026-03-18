@@ -1,35 +1,34 @@
 require("dotenv").config();
-const mysql = require("mysql2/promise");
+const { Pool } = require("pg");
 
 async function main() {
-  const pool = mysql.createPool({
+  const pool = new Pool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
+    ssl: { rejectUnauthorized: false },
   });
 
   try {
-    console.log("Starting migration: Creating users table...");
+    console.log("Starting migration: Creating users table (PostgreSQL)...");
 
-    await pool.execute(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         username VARCHAR(100) NOT NULL,
         email VARCHAR(255),
-        phone_number VARCHAR(50) NULL,
-        balance DECIMAL(12,2) NOT NULL DEFAULT 0,
-        telegram_id VARCHAR(100) NULL,
-        telegram_username VARCHAR(100) NULL,
-        referral_code VARCHAR(50) NULL,
-        referred_by INT NULL,
+        phone_number VARCHAR(50),
+        balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+        telegram_id VARCHAR(100),
+        telegram_username VARCHAR(100),
+        referral_code VARCHAR(50),
+        referred_by INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_telegram_id (telegram_id),
-        INDEX idx_phone_number (phone_number)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT idx_telegram_id UNIQUE (telegram_id),
+        CONSTRAINT idx_phone_number UNIQUE (phone_number)
       )
     `);
 

@@ -7,11 +7,10 @@ const db = require("../config/db");
  */
 const verifyUserByTelegramId = async (telegramId) => {
   try {
-    const [rows] = await db.execute(
-      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE telegram_id = ?",
+    const { rows } = await db.query(
+      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE telegram_id = $1",
       [telegramId]
     );
-
     return rows.length > 0 ? rows[0] : null;
   } catch (error) {
     console.error("Error verifying user by Telegram ID:", error);
@@ -27,18 +26,16 @@ const verifyUserByTelegramId = async (telegramId) => {
  */
 const verifyPhoneAndTelegramId = async (phoneNumber, telegramId) => {
   try {
-    const [rows] = await db.execute(
-      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE phone_number = ? AND telegram_id = ?",
+    const { rows } = await db.query(
+      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE phone_number = $1 AND telegram_id = $2",
       [phoneNumber, telegramId]
     );
-
     if (rows.length === 0) {
       return {
         success: false,
         message: "No user found with this phone number and Telegram ID",
       };
     }
-
     return {
       success: true,
       user: rows[0],
