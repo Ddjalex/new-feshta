@@ -1,6 +1,6 @@
 {
   "version": 2,
-  // ...builds section removed...
+  
   "routes": [
     { "src": "/api/(.*)", "dest": "/index.js" },
     { "src": "/admin/?$", "dest": "/admin/index.html" },

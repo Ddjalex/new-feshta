@@ -41,7 +41,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Database connection
-const db = require("./config/db");
+const pool = require("./config/db");
 
 // Import routes
 const indexRoutes = require("./routes/index");
@@ -54,12 +54,11 @@ app.use("/api/payment", paymentRoutes);
 // Get user data from database by Telegram ID
 const getUserByTelegramId = async (telegramId) => {
   try {
-    const [rows] = await db.execute(
-      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE telegram_id = ?",
+    const result = await pool.query(
+      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE telegram_id = $1",
       [telegramId]
     );
-
-    return rows.length > 0 ? rows[0] : null;
+    return result.rows.length > 0 ? result.rows[0] : null;
   } catch (error) {
     console.error("Error fetching user by Telegram ID:", error);
     return null;
@@ -69,12 +68,11 @@ const getUserByTelegramId = async (telegramId) => {
 // New function to get user by phone number
 const getUserByPhoneNumber = async (phoneNumber) => {
   try {
-    const [rows] = await db.execute(
-      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE phone_number = ?",
+    const result = await pool.query(
+      "SELECT id, username, phone_number, balance, telegram_id FROM users WHERE phone_number = $1",
       [phoneNumber]
     );
-
-    return rows.length > 0 ? rows[0] : null;
+    return result.rows.length > 0 ? result.rows[0] : null;
   } catch (error) {
     console.error("Error fetching user by phone number:", error);
     return null;
@@ -90,73 +88,58 @@ const generateReferralCode = () => {
 const processReferralBonus = async (userId) => {
   try {
     // First check if this is the user's first deposit
-    const [transactions] = await db.execute(
-      "SELECT COUNT(*) as count FROM transactions WHERE user_id = ? AND transaction_type = 'deposit' AND status = 'completed'",
+    const transactionsResult = await pool.query(
+      "SELECT COUNT(*) as count FROM transactions WHERE user_id = $1 AND transaction_type = 'deposit' AND status = 'completed'",
       [userId]
     );
-
-    if (transactions[0].count > 1) {
+    if (transactionsResult.rows[0].count > 1) {
       // Not first deposit, no bonus
       return { success: false, message: "Not first deposit" };
     }
-
     // Get the user's referrer
-    const [userInfo] = await db.execute(
-      "SELECT referred_by FROM users WHERE id = ?",
+    const userInfoResult = await pool.query(
+      "SELECT referred_by FROM users WHERE id = $1",
       [userId]
     );
-
-    if (!userInfo[0] || !userInfo[0].referred_by) {
+    if (!userInfoResult.rows[0] || !userInfoResult.rows[0].referred_by) {
       // No referrer, no bonus
       return { success: false, message: "No referrer" };
     }
-
-    const referrerId = userInfo[0].referred_by;
-
+    const referrerId = userInfoResult.rows[0].referred_by;
     // Get referral settings
-    const [settings] = await db.execute(
+    const settingsResult = await pool.query(
       "SELECT bonus_percentage, min_deposit_amount FROM referral_settings WHERE id = 1"
     );
-
-    if (!settings || settings.length === 0) {
+    if (!settingsResult.rows || settingsResult.rows.length === 0) {
       return { success: false, message: "No referral settings" };
     }
-
-    const bonusPercentage = settings[0].bonus_percentage;
-    const minDepositAmount = settings[0].min_deposit_amount;
-
+    const bonusPercentage = settingsResult.rows[0].bonus_percentage;
+    const minDepositAmount = settingsResult.rows[0].min_deposit_amount;
     // Get the deposit amount
-    const [depositInfo] = await db.execute(
-      "SELECT SUM(amount) as total FROM transactions WHERE user_id = ? AND transaction_type = 'deposit' AND status = 'completed'",
+    const depositInfoResult = await pool.query(
+      "SELECT SUM(amount) as total FROM transactions WHERE user_id = $1 AND transaction_type = 'deposit' AND status = 'completed'",
       [userId]
     );
-
-    const depositAmount = depositInfo[0].total || 0;
-
+    const depositAmount = depositInfoResult.rows[0].total || 0;
     if (depositAmount < minDepositAmount) {
       return { success: false, message: "Deposit below minimum" };
     }
-
     // Calculate bonus amount
     const bonusAmount = (depositAmount * bonusPercentage) / 100;
-
     // Begin transaction
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       // Create referral earning record
-      await connection.execute(
-        "INSERT INTO referral_earnings (referrer_id, referred_id, amount, status, completed_at) VALUES (?, ?, ?, 'completed', NOW())",
+      await client.query(
+        "INSERT INTO referral_earnings (referrer_id, referred_id, amount, status, completed_at) VALUES ($1, $2, $3, 'completed', NOW())",
         [referrerId, userId, bonusAmount]
       );
-
       // Update referrer's balance
-      await connection.execute(
-        "UPDATE users SET balance = balance + ? WHERE id = ?",
+      await client.query(
+        "UPDATE users SET balance = balance + $1 WHERE id = $2",
         [bonusAmount, referrerId]
       );
-
       // Add transaction record
       await connection.execute(
         "INSERT INTO transactions (user_id, transaction_type, amount, status, reference_id) VALUES (?, 'commission', ?, 'completed', ?)",
