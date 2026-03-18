@@ -26,6 +26,12 @@ app.use("/admin", express.static(path.join(__dirname, "admin")));
 // Session data for users (store in memory)
 const sessions = {};
 
+// Helper: build the Web App URL from env (avoid trailing slashes / wrong paths)
+const getWebAppUrl = (query = "") => {
+  const base = (process.env.WEBAPP_URL || "").replace(/\/+$/, "");
+  return `${base}${query}`;
+};
+
 // Make bot instance available to routes
 app.set("botInstance", bot);
 
@@ -558,11 +564,10 @@ bot.on("callback_query", async (ctx) => {
         },
       });
     } else if (action === "start_game") {
-      const webappUrl = `${process.env.WEBAPP_URL}?tgUserId=${telegramId}`;
+      const webappUrl = getWebAppUrl(`?tgUserId=${telegramId}`);
 
       await ctx.answerCbQuery();
 
-      // For local/testing use (ngrok etc), Telegram may show a warning page.
       // Use a normal URL button instead of WebApp to avoid the Telegram WebApp warning.
       await ctx.reply("Open the game using the link below:", {
         reply_markup: {
@@ -762,7 +767,7 @@ bot.hears("📜 My Transactions", async (ctx) => {
 // Handle play game command
 bot.hears("🎮 Play Game", async (ctx) => {
   const telegramId = ctx.from.id;
-  const webappUrl = `${process.env.WEBAPP_URL}/login?tgUserId=${telegramId}`;
+  const webappUrl = getWebAppUrl(`?tgUserId=${telegramId}`);
 
   // Use a regular URL button so Telegram doesn't force a WebApp warning page.
   await ctx.reply("Open the game using the link below:", {
