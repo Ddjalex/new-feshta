@@ -11,10 +11,11 @@
     "test-message": "node send-test-message.js"
   },
   "dependencies": {
-    "concurrently": "^8.2.0",
     "axios": "^1.8.1",
-    "body-parser": "^1.20.2",
+    "body-parser": "^1.20.4",
+    "concurrently": "^8.2.0",
     "cors": "^2.8.5",
+    "express-fileupload": "^1.4.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",

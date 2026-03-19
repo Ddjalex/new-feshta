@@ -3125,10 +3125,10 @@ app.post("/api/telegram/broadcast", async (req, res) => {
   }
 });
 
-// Start the Express server
-const PORT = process.env.PORT || 3001;
+// Start the Express server for bot API
+const PORT = process.env.BOT_PORT || 5034;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Bot server running on port ${PORT}`);
 });
 
 // Start the bot
