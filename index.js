@@ -2986,11 +2986,14 @@ bot.on("contact", async (ctx) => {
         }
       } catch (error) {
         console.error("Error creating new user:", error);
+
+        const userMessage =
+          process.env.NODE_ENV === "production"
+            ? "Sorry, there was an error creating your account. Please try again later."
+            : `Sorry, there was an error creating your account: ${error.message}`;
+
         try {
-          await safeReply(
-            ctx,
-            "Sorry, there was an error creating your account. Please try again later."
-          );
+          await safeReply(ctx, userMessage);
         } catch (err) {
           if (
             err.description &&
