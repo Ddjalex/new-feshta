@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ override: true });
 const { Telegraf, Markup } = require("telegraf");
 const express = require("express");
 const cors = require("cors");
@@ -116,6 +116,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Database connection
 const db = require("./config/db");
+const isDbAvailable = () => (db && typeof db.isAvailable === "function" ? db.isAvailable() : false);
 
 // Import routes
 const indexRoutes = require("./routes/index");
@@ -127,6 +128,11 @@ app.use("/api/payment", paymentRoutes);
 
 // Get user data from database by Telegram ID
 const getUserByTelegramId = async (telegramId) => {
+  if (!isDbAvailable()) {
+    console.warn("Database unavailable: skipping getUserByTelegramId");
+    return null;
+  }
+
   try {
     const [rows] = await db.execute(
       "SELECT id, username, phone_number, balance, telegram_id, isBlocked, blocked_reason FROM users WHERE telegram_id = ?",
@@ -142,6 +148,11 @@ const getUserByTelegramId = async (telegramId) => {
 
 // New function to get user by phone number
 const getUserByPhoneNumber = async (phoneNumber) => {
+  if (!isDbAvailable()) {
+    console.warn("Database unavailable: skipping getUserByPhoneNumber");
+    return null;
+  }
+
   try {
     const [rows] = await db.execute(
       "SELECT id, username, phone_number, balance, telegram_id, isBlocked, blocked_reason FROM users WHERE phone_number = ?",
@@ -400,6 +411,23 @@ bot.start(async (ctx) => {
   }
 
   try {
+    if (!isDbAvailable()) {
+      await safeReply(
+        ctx,
+        "Database is currently unavailable. Continuing with limited local mode; some actions may be disabled."
+      );
+      // fallback behavior: let user continue with minimal commands
+      await safeReply(ctx, `Welcome ${firstName}! Choose from the menu below:`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🎮 Play Game", callback_data: "play_game" }],
+            [{ text: "💰 My Balance (unavailable)", callback_data: "check_balance" }],
+          ],
+        },
+      });
+      return;
+    }
+
     // Check if user already exists
     const { isBlocked, user } = await checkUserBlocked(ctx, telegramId);
 
@@ -2673,6 +2701,25 @@ bot.on("contact", async (ctx) => {
     const firstName = contact.first_name || ctx.from.first_name;
     const lastName = contact.last_name || ctx.from.last_name || "";
     const username = ctx.from.username || `user${telegramId}`;
+
+    if (!isDbAvailable()) {
+      console.warn("Database unavailable; registering user in local session only");
+      sessions[telegramId] = {
+        ...(sessions[telegramId] || {}),
+        localUser: {
+          id: null,
+          username,
+          phone_number: phoneNumber,
+          balance: 0,
+          telegram_id: telegramId,
+        },
+      };
+      await safeReply(
+        ctx,
+        "Your account is temporarily created in local mode while database is unavailable. Please try again later for full functionality."
+      );
+      return;
+    }
 
     // Check if user with this phone number already exists
     const existingUser = await getUserByPhoneNumber(phoneNumber);

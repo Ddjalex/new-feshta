@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ override: true });
 const { Pool } = require("pg");
 
 // Build Neon-compatible connection string with endpoint fallback
@@ -45,6 +45,29 @@ const poolConfig = databaseUrl
     };
 
 const pool = new Pool(poolConfig);
+let dbAvailable = true;
+
+function wrapQuery(fn, type = 'query') {
+  return async (text, params = []) => {
+    if (!dbAvailable) {
+      console.warn('Database unavailable, returning empty result for ' + type + ':', text);
+      if (type === 'execute') return [[], []];
+      if (type === 'query') return { rows: [], fields: [] };
+      return null;
+    }
+
+    try {
+      const { sql, params: convertedParams } = convertPlaceholders(text, params);
+      return await fn(sql, convertedParams);
+    } catch (error) {
+      console.error('Database query failed, marking DB as unavailable:', error.message || error);
+      dbAvailable = false;
+      if (type === 'execute') return [[], []];
+      if (type === 'query') return { rows: [], fields: [] };
+      return null;
+    }
+  };
+}
 
 // Helper to convert MySQL-style ? placeholders to Postgres $n placeholders
 function convertPlaceholders(sql, params = []) {
@@ -63,35 +86,38 @@ function convertPlaceholders(sql, params = []) {
 
 // Add convenience wrapper for execute() (MySQL-style compatibility)
 const dbClient = {
-  query: (text, params) => {
-    const { sql, params: convertedParams } = convertPlaceholders(text, params);
-    return pool.query(sql, convertedParams);
-  },
-  execute: async (text, params) => {
-    const { sql, params: convertedParams } = convertPlaceholders(text, params);
-    const result = await pool.query(sql, convertedParams);
-    return [result.rows, result.fields];
-  },
+  query: wrapQuery(async (sql, params) => pool.query(sql, params)),
+
+  execute: wrapQuery(async (sql, params) => {
+    const result = await pool.query(sql, params);
+    return [result.rows, result.fields || []];
+  }),
+
   getConnection: async () => {
+    if (!dbAvailable) {
+      throw new Error('Database not available during getConnection');
+    }
+
     const client = await pool.connect();
     return {
-      execute: async (text, params) => {
-        const { sql, params: convertedParams } = convertPlaceholders(text, params);
-        const result = await client.query(sql, convertedParams);
-        return [result.rows, result.fields];
-      },
+      execute: wrapQuery(async (sql, params) => {
+        const result = await client.query(sql, params);
+        return [result.rows, result.fields || []];
+      }),
       beginTransaction: async () => {
-        await client.query("BEGIN");
+        await client.query('BEGIN');
       },
       commit: async () => {
-        await client.query("COMMIT");
+        await client.query('COMMIT');
       },
       rollback: async () => {
-        await client.query("ROLLBACK");
+        await client.query('ROLLBACK');
       },
       release: () => client.release(),
     };
   },
+
+  isAvailable: () => dbAvailable,
 };
 
 // Test database connection and print helpful guidance if it fails
