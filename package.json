@@ -2,10 +2,10 @@
   "name": "bingo-telegram-bot",
   "version": "1.0.0",
   "description": "Telegram mini-app bot for Bingo game",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
     "migrate": "node migrations/initial-setup.js && node migrations/add-payment-tables.js",
     "migrate:phone": "node migrations/add-phone-number.js",
     "test-message": "node send-test-message.js"

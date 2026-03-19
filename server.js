@@ -8,19 +8,38 @@ require("dotenv").config();
 // Create Express app
 const app = express();
 
-// Configure CORS
+// Middlewares
 app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// API routes (mounted under /api)
+const telegramRoutes = require("./routes/telegramRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const apiRoutes = require("./routes/index");
+
+app.use("/api/telegram", telegramRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api", apiRoutes);
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, "public")));
 
-// Handle all routes and redirect to index.html (for SPA)
+// Health check
+app.get("/health", (req, res) => res.json({ status: "ok" }));
+
+// Handle all other routes and redirect to index.html (for SPA)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Start the server
-const PORT = process.env.WEBAPP_PORT || 3002;
-app.listen(PORT, () => {
-  console.log(`Mini App server running on port ${PORT}`);
-});
+// For local development / direct node runs, start the HTTP server.
+// In serverless environments (e.g. Vercel), the handler is exported and Vercel will invoke it.
+if (require.main === module) {
+  const PORT = process.env.WEBAPP_PORT || process.env.PORT || 3002;
+  app.listen(PORT, () => {
+    console.log(`Mini App server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
