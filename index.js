@@ -12,9 +12,13 @@ const paymentRoutes = require("./routes/paymentRoutes");
 // Payment service for handling transactions
 const paymentService = require("./services/paymentService");
 
-// Use the provided token or fall back to env variable
-const BOT_TOKEN =
-  "8427577528:AAF3z-O84R-oRALh5hiEJnUJWu5x5M-EnP0" || process.env.BOT_TOKEN;
+// Use environment token (production) or fallback for local debugging
+const BOT_TOKEN = process.env.BOT_TOKEN || "8427577528:AAF3z-O84R-oRALh5hiEJnUJWu5x5M-EnP0";
+
+if (!BOT_TOKEN || BOT_TOKEN === "YOUR_BOT_TOKEN_HERE") {
+  console.error("FATAL: TELEGRAM BOT_TOKEN is missing. Set BOT_TOKEN in .env or environment vars.");
+  process.exit(1);
+}
 
 // Initialize Telegram bot with session
 const bot = new Telegraf(BOT_TOKEN);
@@ -23,22 +27,28 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Set up bot commands menu
-bot.telegram.setMyCommands([
-  { command: "start", description: "Start the bot" },
-  { command: "play", description: "🎮 Play Game" },
-  { command: "winning_patterns", description: "🏆 Winning Patterns" },
-  { command: "instructions", description: "📝 Game Instructions" },
-  { command: "balance", description: "💰 Check Balance" },
-  { command: "deposit", description: "💵 Deposit" },
-  { command: "withdraw", description: "💸 Withdraw" },
-  // { command: "transfer", description: "💸 Transfer to User" },
-  { command: "transactions", description: "📜 My Transactions" },
-  { command: "referrals", description: "👥 Referrals" },
-  { command: "referral_voucher", description: "🎟️ Referral Voucher" },
-  { command: "contact_support", description: "📞 Contact Support" },
-  { command: "help", description: "❓ Help" },
-]);
+// Set up bot commands menu in a safe initializer
+(async () => {
+  try {
+    await bot.telegram.setMyCommands([
+      { command: "start", description: "Start the bot" },
+      { command: "play", description: "🎮 Play Game" },
+      { command: "winning_patterns", description: "🏆 Winning Patterns" },
+      { command: "instructions", description: "📝 Game Instructions" },
+      { command: "balance", description: "💰 Check Balance" },
+      { command: "deposit", description: "💵 Deposit" },
+      { command: "withdraw", description: "💸 Withdraw" },
+      { command: "transactions", description: "📜 My Transactions" },
+      { command: "referrals", description: "👥 Referrals" },
+      { command: "referral_voucher", description: "🎟️ Referral Voucher" },
+      { command: "contact_support", description: "📞 Contact Support" },
+      { command: "help", description: "❓ Help" },
+    ]);
+    console.log("Bot commands initialized");
+  } catch (err) {
+    console.warn("Warning: Unable to initialize bot commands: ", err.message || err);
+  }
+})();
 
 // Session data for users (store in memory)
 const sessions = {};
