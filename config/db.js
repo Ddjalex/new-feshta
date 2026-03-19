@@ -47,13 +47,11 @@ const poolConfig = databaseUrl
 const pool = new Pool(poolConfig);
 let dbAvailable = true;
 
-function wrapQuery(fn, type = 'query') {
+function wrapQuery(fn) {
   return async (text, params = []) => {
     if (!dbAvailable) {
-      console.warn('Database unavailable, returning empty result for ' + type + ':', text);
-      if (type === 'execute') return [[], []];
-      if (type === 'query') return { rows: [], fields: [] };
-      return null;
+      console.warn('Database unavailable, returning empty result for query:', text);
+      return { rows: [], fields: [] };
     }
 
     try {
@@ -62,9 +60,7 @@ function wrapQuery(fn, type = 'query') {
     } catch (error) {
       console.error('Database query failed, marking DB as unavailable:', error.message || error);
       dbAvailable = false;
-      if (type === 'execute') return [[], []];
-      if (type === 'query') return { rows: [], fields: [] };
-      return null;
+      return { rows: [], fields: [] };
     }
   };
 }
@@ -86,12 +82,38 @@ function convertPlaceholders(sql, params = []) {
 
 // Add convenience wrapper for execute() (MySQL-style compatibility)
 const dbClient = {
-  query: wrapQuery(async (sql, params) => pool.query(sql, params)),
+  query: async (text, params) => {
+    if (!dbAvailable) {
+      console.warn('Database unavailable: query fallback to empty');
+      return { rows: [], fields: [] };
+    }
 
-  execute: wrapQuery(async (sql, params) => {
-    const result = await pool.query(sql, params);
-    return [result.rows, result.fields || []];
-  }),
+    try {
+      const { sql, params: convertedParams } = convertPlaceholders(text, params);
+      return await pool.query(sql, convertedParams);
+    } catch (error) {
+      console.error('Database query failed, marking DB as unavailable:', error.message || error);
+      dbAvailable = false;
+      return { rows: [], fields: [] };
+    }
+  },
+
+  execute: async (text, params) => {
+    if (!dbAvailable) {
+      console.warn('Database unavailable: execute fallback to empty rows');
+      return [[], []];
+    }
+
+    try {
+      const { sql, params: convertedParams } = convertPlaceholders(text, params);
+      const result = await pool.query(sql, convertedParams);
+      return [result.rows, result.fields || []];
+    } catch (error) {
+      console.error('Database execute failed, marking DB as unavailable:', error.message || error);
+      dbAvailable = false;
+      return [[], []];
+    }
+  },
 
   getConnection: async () => {
     if (!dbAvailable) {
@@ -100,10 +122,16 @@ const dbClient = {
 
     const client = await pool.connect();
     return {
-      execute: wrapQuery(async (sql, params) => {
-        const result = await client.query(sql, params);
-        return [result.rows, result.fields || []];
-      }),
+      execute: async (text, params) => {
+        try {
+          const { sql, params: convertedParams } = convertPlaceholders(text, params);
+          const result = await client.query(sql, convertedParams);
+          return [result.rows, result.fields || []];
+        } catch (error) {
+          console.error('Connection execute failed:', error.message || error);
+          throw error;
+        }
+      },
       beginTransaction: async () => {
         await client.query('BEGIN');
       },
@@ -121,10 +149,30 @@ const dbClient = {
 };
 
 // Test database connection and print helpful guidance if it fails
+async function ensureUserTableColumns() {
+  try {
+    const client = await pool.connect();
+
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS isblocked BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS blocked_reason TEXT
+    `);
+
+    client.release();
+  } catch (error) {
+    console.warn("Could not ensure users table columns; continuing anyway:", error.message || error);
+  }
+}
+
 async function testConnection() {
   try {
     const client = await pool.connect();
     console.log("PostgreSQL database connection successful");
+
+    // Ensure schema fields expected by the app exist
+    await ensureUserTableColumns();
+
     client.release();
   } catch (error) {
     console.error("Error connecting to PostgreSQL database:");

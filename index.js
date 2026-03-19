@@ -135,9 +135,13 @@ const getUserByTelegramId = async (telegramId) => {
 
   try {
     const [rows] = await db.execute(
-      "SELECT id, username, phone_number, balance, telegram_id, isBlocked, blocked_reason FROM users WHERE telegram_id = ?",
+      "SELECT id, username, phone_number, balance, telegram_id, telegram_username FROM users WHERE telegram_id = ?",
       [telegramId]
     );
+
+    if (!rows || !Array.isArray(rows)) {
+      return null;
+    }
 
     return rows.length > 0 ? rows[0] : null;
   } catch (error) {
@@ -155,9 +159,13 @@ const getUserByPhoneNumber = async (phoneNumber) => {
 
   try {
     const [rows] = await db.execute(
-      "SELECT id, username, phone_number, balance, telegram_id, isBlocked, blocked_reason FROM users WHERE phone_number = ?",
+      "SELECT id, username, phone_number, balance, telegram_id, telegram_username FROM users WHERE phone_number = ?",
       [phoneNumber]
     );
+
+    if (!rows || !Array.isArray(rows)) {
+      return null;
+    }
 
     return rows.length > 0 ? rows[0] : null;
   } catch (error) {
