@@ -138,40 +138,49 @@
     </footer>
 
     <script>
-      // Safe initialization for Telegram WebApp (works inside and outside Telegram)
-      const telegramWebApp = window.Telegram?.WebApp;
+      // Initialize Telegram WebApp
+      const telegramWebApp = window.Telegram.WebApp;
+      telegramWebApp.expand();
+      telegramWebApp.ready();
 
-      if (telegramWebApp) {
-        telegramWebApp.expand();
-        telegramWebApp.ready();
+      // Set theme
+      document.body.style.backgroundColor =
+        telegramWebApp.themeParams.bg_color || "#17212b";
+      document.body.style.color =
+        telegramWebApp.themeParams.text_color || "#ffffff";
 
-        // Set theme from Telegram parameters
-        document.body.style.backgroundColor =
-          telegramWebApp.themeParams.bg_color || "#17212b";
-        document.body.style.color =
-          telegramWebApp.themeParams.text_color || "#ffffff";
+      // Handle start button click
+      document
+        .getElementById("startButton")
+        .addEventListener("click", function () {
+          // Redirect to the main game URL
+          window.location.href = "https://your-bingo-game-url.com/game";
 
-        // Add back button event if needed
-        telegramWebApp.BackButton.onClick(function () {
-          // Handle back button press
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
+          // Or send data back to the bot
+          /*
+            telegramWebApp.sendData(JSON.stringify({
+                action: 'start_game',
+                timestamp: new Date().toISOString()
+            }));
             telegramWebApp.close();
-          }
+            */
         });
 
-        // Configure the Telegram main button (top right)
-        telegramWebApp.MainButton.setText("PLAY NOW");
-        telegramWebApp.MainButton.onClick(function () {
-          // Use the current origin so this works reliably across deployments
-          window.location.href = window.location.origin;
-        });
-      }
+      // Add back button event if needed
+      telegramWebApp.BackButton.onClick(function () {
+        // Handle back button press
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          telegramWebApp.close();
+        }
+      });
 
-      // Handle start button click (works inside/outside Telegram)
-      document.getElementById("startButton").addEventListener("click", function () {
-        window.location.href = window.location.origin;
+      // Handle main button if needed
+      telegramWebApp.MainButton.setText("PLAY NOW");
+      telegramWebApp.MainButton.onClick(function () {
+        // Redirect to the main game URL
+        window.location.href = "https://your-bingo-game-url.com/game";
       });
     </script>
   </body>

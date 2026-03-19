@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
+const fileUpload = require("express-fileupload");
 
 // Load environment variables
 require("dotenv").config();
@@ -8,50 +9,35 @@ require("dotenv").config();
 // Create Express app
 const app = express();
 
-// Middlewares
+// Configure CORS
 app.use(cors());
+
+// Configure file upload middleware
+app.use(
+  fileUpload({
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    abortOnLimit: true,
+    createParentPath: true,
+  })
+);
+
+// Parse JSON bodies
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Telegram bot (webhook/polling) setup
-const telegramBot = require("./bot");
-
-// Telegram webhook endpoint (used on Vercel)
-// Use `app.post()` so the Telegraf middleware sees the full request path.
-app.post(telegramBot.webhookPath, telegramBot.webhookCallback);
-
-// API routes (mounted under /api)
-const telegramRoutes = require("./routes/telegramRoutes");
-const paymentRoutes = require("./routes/paymentRoutes");
-const apiRoutes = require("./routes/index");
-
-app.use("/api/telegram", telegramRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api", apiRoutes);
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, "public")));
 
-// Health check
-app.get("/health", (req, res) => res.json({ status: "ok" }));
+// Import and use telegram routes
+const telegramRoutes = require("./routes/telegramRoutes");
+app.use("/api/telegram", telegramRoutes);
 
-// Handle all other routes and redirect to index.html (for SPA)
+// Handle all routes and redirect to index.html (for SPA)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Initialize Telegram bot (either webhook mode or polling mode)
-telegramBot.init().catch((err) => {
-  console.error("Failed to initialize Telegram bot:", err);
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Mini App server running on port ${PORT}`);
 });
-
-// For local development / direct node runs, start the HTTP server.
-// In serverless environments (e.g. Vercel), the handler is exported and Vercel will invoke it.
-if (require.main === module) {
-  const PORT = process.env.WEBAPP_PORT || process.env.PORT || 3002;
-  app.listen(PORT, () => {
-    console.log(`Mini App server running on port ${PORT}`);
-  });
-}
-
-module.exports = app;
