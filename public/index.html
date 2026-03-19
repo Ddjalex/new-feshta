@@ -138,40 +138,40 @@
     </footer>
 
     <script>
-      // Initialize Telegram WebApp
-      const telegramWebApp = window.Telegram.WebApp;
-      telegramWebApp.expand();
-      telegramWebApp.ready();
+      // Safe initialization for Telegram WebApp (works inside and outside Telegram)
+      const telegramWebApp = window.Telegram?.WebApp;
 
-      // Set theme
-      document.body.style.backgroundColor =
-        telegramWebApp.themeParams.bg_color || "#17212b";
-      document.body.style.color =
-        telegramWebApp.themeParams.text_color || "#ffffff";
+      if (telegramWebApp) {
+        telegramWebApp.expand();
+        telegramWebApp.ready();
 
-      // Handle start button click
-      document
-        .getElementById("startButton")
-        .addEventListener("click", function () {
-          // Redirect to the main game page (root)
-          window.location.href = "/";
+        // Set theme from Telegram parameters
+        document.body.style.backgroundColor =
+          telegramWebApp.themeParams.bg_color || "#17212b";
+        document.body.style.color =
+          telegramWebApp.themeParams.text_color || "#ffffff";
+
+        // Add back button event if needed
+        telegramWebApp.BackButton.onClick(function () {
+          // Handle back button press
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            telegramWebApp.close();
+          }
         });
 
-      // Add back button event if needed
-      telegramWebApp.BackButton.onClick(function () {
-        // Handle back button press
-        if (window.history.length > 1) {
-          window.history.back();
-        } else {
-          telegramWebApp.close();
-        }
-      });
+        // Configure the Telegram main button (top right)
+        telegramWebApp.MainButton.setText("PLAY NOW");
+        telegramWebApp.MainButton.onClick(function () {
+          // Use the current origin so this works reliably across deployments
+          window.location.href = window.location.origin;
+        });
+      }
 
-      // Handle main button if needed
-      telegramWebApp.MainButton.setText("PLAY NOW");
-      telegramWebApp.MainButton.onClick(function () {
-        // Redirect to the main game URL (Vercel)
-        window.location.href = "https://jutee-nvca.vercel.app/";
+      // Handle start button click (works inside/outside Telegram)
+      document.getElementById("startButton").addEventListener("click", function () {
+        window.location.href = window.location.origin;
       });
     </script>
   </body>
