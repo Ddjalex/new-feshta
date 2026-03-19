@@ -2,20 +2,47 @@ require("dotenv").config({ override: true });
 const { Pool } = require("pg");
 
 // Build Neon-compatible connection string with endpoint fallback
+function normalizeNeonHost(hostname) {
+  if (!hostname) return hostname;
+
+  // Neon pooler hostnames can be in the form <id>.c6.us-east-1.aws.neon.tech,
+  // but TLS certs use *.us-east-1.aws.neon.tech. Normalize to host that matches certificate.
+  if (hostname.includes(".c6.") && hostname.endsWith(".aws.neon.tech")) {
+    return hostname.replace(".c6.", ".");
+  }
+
+  if (hostname.endsWith(".aws.neon.tech")) {
+    // already in cert scope, no change
+    return hostname;
+  }
+
+  return hostname;
+}
+
 function ensureNeonConnectionString(urlString) {
   if (!urlString) return urlString;
 
   try {
     const url = new URL(urlString);
 
-    // If Neon, include endpoint option in URL query when missing
+    // If Neon, normalize hostname and include endpoint option in URL query when missing
     if (url.hostname && url.hostname.endsWith(".neon.tech")) {
+      const normalized = normalizeNeonHost(url.hostname);
+      if (normalized && normalized !== url.hostname) {
+        url.hostname = normalized;
+      }
+
       const currentOptions = url.searchParams.get("options");
       if (!currentOptions || !currentOptions.includes("endpoint")) {
         const endpointId = url.hostname.split(".")[0];
         if (endpointId) {
           url.searchParams.set("options", `endpoint=${encodeURIComponent(endpointId)}`);
         }
+      }
+
+      // Use libpq compatibility; avoid pg default behavior changing in future versions
+      if (!url.searchParams.has("uselibpqcompat")) {
+        url.searchParams.set("uselibpqcompat", "true");
       }
     }
 
@@ -33,7 +60,10 @@ const databaseUrl = ensureNeonConnectionString(rawDatabaseUrl);
 const poolConfig = databaseUrl
   ? {
       connectionString: databaseUrl,
-      ssl: { rejectUnauthorized: false },
+      ssl: {
+        rejectUnauthorized: false,
+        checkServerIdentity: () => undefined,
+      },
     }
   : {
       host: process.env.DB_HOST,
@@ -41,7 +71,10 @@ const poolConfig = databaseUrl
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
-      ssl: { rejectUnauthorized: false }, // Neon requires SSL
+      ssl: {
+        rejectUnauthorized: false,
+        checkServerIdentity: () => undefined,
+      }, // Neon requires SSL
     };
 
 const pool = new Pool(poolConfig);
