@@ -1,6 +1,7 @@
 require("dotenv").config({ override: true });
 const { Telegraf, Markup } = require("telegraf");
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const axios = require("axios");
@@ -26,6 +27,12 @@ const app = express();
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve web frontend from public
+app.use(express.static(path.join(__dirname, "public")));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // Set up bot commands menu in a safe initializer
 (async () => {
