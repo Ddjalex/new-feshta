@@ -5,6 +5,7 @@ const path = require("path");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const fileUpload = require("express-fileupload");
 
 // Import routes
 const telegramRoutes = require("./routes/telegramRoutes");
@@ -25,6 +26,12 @@ if (!BOT_TOKEN || BOT_TOKEN === "YOUR_BOT_TOKEN_HERE") {
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
+app.use(cors());
+app.use(fileUpload({
+  limits: { fileSize: 5 * 1024 * 1024 },
+  abortOnLimit: true,
+  createParentPath: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -117,7 +124,6 @@ const safeReplyWithPhoto = async (ctx, photo, options = {}) => {
 app.set("botInstance", bot);
 
 // Middleware
-app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -3201,9 +3207,9 @@ app.post("/api/telegram/broadcast", async (req, res) => {
 });
 
 // Start the Express server for bot API
-const PORT = process.env.BOT_PORT || 3000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Bot server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
 
 // Start the bot

@@ -4,8 +4,8 @@
   "description": "Telegram mini-app bot for Bingo game",
   "main": "server.js",
   "scripts": {
-    "start": "concurrently \"node index.js\" \"node server.js\"",
-    "dev": "concurrently \"nodemon index.js\" \"nodemon server.js\"",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "migrate": "node migrations/initial-setup.js && node migrations/add-payment-tables.js",
     "migrate:phone": "node migrations/add-phone-number.js",
     "test-message": "node send-test-message.js"
