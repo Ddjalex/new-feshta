@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -138,50 +138,50 @@
     </footer>
 
     <script>
-      // Initialize Telegram WebApp
-      const telegramWebApp = window.Telegram.WebApp;
-      telegramWebApp.expand();
-      telegramWebApp.ready();
+            // Initialize Telegram WebApp
+            const telegramWebApp = window.Telegram.WebApp;
+            telegramWebApp.expand();
+            telegramWebApp.ready();
 
-      // Set theme
-      document.body.style.backgroundColor =
-        telegramWebApp.themeParams.bg_color || "#17212b";
-      document.body.style.color =
-        telegramWebApp.themeParams.text_color || "#ffffff";
+            // Set theme
+            document.body.style.backgroundColor =
+              telegramWebApp.themeParams.bg_color || "#17212b";
+            document.body.style.color =
+              telegramWebApp.themeParams.text_color || "#ffffff";
 
-      // Handle start button click
-      document
-        .getElementById("startButton")
-        .addEventListener("click", function () {
-          // Redirect to the main game URL
-          window.location.href = "https://your-bingo-game-url.com/game";
+            // Handle start button click
+            document
+              .getElementById("startButton")
+              .addEventListener("click", function () {
+                // Redirect to the main game URL
+                window.location.href = "https://bingojute-7x88.vercel.app/game";
 
-          // Or send data back to the bot
-          /*
-            telegramWebApp.sendData(JSON.stringify({
-                action: 'start_game',
-                timestamp: new Date().toISOString()
-            }));
-            telegramWebApp.close();
-            */
-        });
+                // Or send data back to the bot
+                /*
+                  telegramWebApp.sendData(JSON.stringify({
+                      action: 'start_game',
+                      timestamp: new Date().toISOString()
+                  }));
+                  telegramWebApp.close();
+                  */
+              });
 
-      // Add back button event if needed
-      telegramWebApp.BackButton.onClick(function () {
-        // Handle back button press
-        if (window.history.length > 1) {
-          window.history.back();
-        } else {
-          telegramWebApp.close();
-        }
-      });
+            // Add back button event if needed
+            telegramWebApp.BackButton.onClick(function () {
+              // Handle back button press
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                telegramWebApp.close();
+              }
+            });
 
-      // Handle main button if needed
-      telegramWebApp.MainButton.setText("PLAY NOW");
-      telegramWebApp.MainButton.onClick(function () {
-        // Redirect to the main game URL
-        window.location.href = "https://your-bingo-game-url.com/game";
-      });
+            // Handle main button if needed
+            telegramWebApp.MainButton.setText("PLAY NOW");
+            telegramWebApp.MainButton.onClick(function () {
+              // Redirect to the main game URL
+              window.location.href = "https://bingojute-7x88.vercel.app/game";
+            });
     </script>
   </body>
 </html>
