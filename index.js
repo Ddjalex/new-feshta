@@ -14,7 +14,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const paymentService = require("./services/paymentService");
 
 // Use environment token (production) or fallback for local debugging
-const BOT_TOKEN = process.env.BOT_TOKEN || "8427577528:AAF3z-O84R-oRALh5hiEJnUJWu5x5M-EnP0";
+const BOT_TOKEN = process.env.BOT_TOKEN;
 
 if (!BOT_TOKEN || BOT_TOKEN === "YOUR_BOT_TOKEN_HERE") {
   console.error("FATAL: TELEGRAM BOT_TOKEN is missing. Set BOT_TOKEN in .env or environment vars.");
@@ -3201,8 +3201,8 @@ app.post("/api/telegram/broadcast", async (req, res) => {
 });
 
 // Start the Express server for bot API
-const PORT = process.env.BOT_PORT || 5034;
-app.listen(PORT, () => {
+const PORT = process.env.BOT_PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Bot server running on port ${PORT}`);
 });
 
